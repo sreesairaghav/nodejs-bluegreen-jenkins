@@ -12,19 +12,13 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                echo 'Checking out Blue-Green deployment project'
+                checkout scm
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 bat 'docker build -t %IMAGE% .'
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                bat 'docker push %IMAGE%'
             }
         }
 
