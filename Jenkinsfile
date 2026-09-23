@@ -18,13 +18,11 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                bat 'docker build -t %IMAGE% .'
-            }
-        }
+                echo 'Building Docker image...'
 
-        stage('Push Docker Image') {
-            steps {
-                bat 'docker push %IMAGE%'
+                bat 'docker build -t %IMAGE% .'
+
+                echo 'Docker image built successfully.'
             }
         }
 
@@ -57,12 +55,16 @@ pipeline {
 
                     } else {
 
-                        error("Could not determine active environment. Detected: [${active}]")
+                        error(
+                            "Could not determine active environment. " +
+                            "Detected value: [${active}]"
+                        )
                     }
 
                     echo "Currently active environment: ${active}"
                     echo "New deployment target: ${env.TARGET_ENV}"
                     echo "Deployment port: ${env.TARGET_PORT}"
+                    echo "Target container: ${env.TARGET_CONTAINER}"
 
                     echo '=========================================='
                 }
@@ -72,24 +74,34 @@ pipeline {
         stage('Deploy New Environment') {
             steps {
 
-                echo "Deploying ${env.TARGET_ENV} environment..."
+                echo '=========================================='
+                echo "       DEPLOYING ${env.TARGET_ENV}"
+                echo '=========================================='
 
                 bat '''
                 docker rm -f %TARGET_CONTAINER% 2>NUL || exit /b 0
-                docker run -d --name %TARGET_CONTAINER% -p %TARGET_PORT%:3000 -e VERSION=%TARGET_ENV% %IMAGE%
+
+                docker run -d ^
+                    --name %TARGET_CONTAINER% ^
+                    -p %TARGET_PORT%:3000 ^
+                    -e VERSION=%TARGET_ENV% ^
+                    %IMAGE%
                 '''
 
-                echo "Deployment of ${env.TARGET_ENV} completed."
+                echo "${env.TARGET_ENV} environment deployed successfully."
             }
         }
 
         stage('Test New Environment') {
             steps {
 
-                echo "Testing ${env.TARGET_ENV} on port ${env.TARGET_PORT}..."
+                echo '=========================================='
+                echo "       TESTING ${env.TARGET_ENV}"
+                echo '=========================================='
 
                 bat '''
                 timeout /t 5 /nobreak
+
                 curl.exe -f http://localhost:%TARGET_PORT%/status
                 '''
 
@@ -100,9 +112,9 @@ pipeline {
         stage('Switch Traffic') {
             steps {
 
-                echo "=========================================="
-                echo " SWITCHING TRAFFIC TO ${env.TARGET_ENV}"
-                echo "=========================================="
+                echo '=========================================='
+                echo "   SWITCHING TRAFFIC TO ${env.TARGET_ENV}"
+                echo '=========================================='
 
                 bat '''
                 powershell -NoProfile -Command "$c=Get-Content nginx.conf; $c=$c -replace 'host.docker.internal:\\d+','host.docker.internal:%TARGET_PORT%'; Set-Content nginx.conf $c"
@@ -117,14 +129,17 @@ pipeline {
         stage('Verify Deployment') {
             steps {
 
-                echo "Verifying traffic through Nginx..."
+                echo '=========================================='
+                echo '       VERIFYING DEPLOYMENT'
+                echo '=========================================='
 
                 bat '''
                 timeout /t 3 /nobreak
+
                 curl.exe -f http://localhost:8090/status
                 '''
 
-                echo "Traffic verification successful."
+                echo "Traffic successfully verified through Nginx."
             }
         }
 
@@ -147,18 +162,27 @@ pipeline {
     post {
 
         success {
+
             echo '=========================================='
             echo '   BLUE-GREEN DEPLOYMENT SUCCESSFUL!'
             echo '=========================================='
+
             echo "Traffic has been switched to ${env.TARGET_ENV}."
-            echo "Previous environment remains available for rollback."
+
+            echo 'The previous environment remains available for rollback.'
+
+            echo '=========================================='
         }
 
         failure {
+
             echo '=========================================='
             echo '   BLUE-GREEN DEPLOYMENT FAILED!'
             echo '=========================================='
+
             echo 'The previous environment remains available for rollback.'
+
+            echo '=========================================='
         }
     }
 }
