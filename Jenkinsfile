@@ -3,9 +3,13 @@ pipeline {
 
     environment {
         IMAGE = 'sreesairaghav13/nodejs-bluegreen:latest'
+
         BLUE_CONTAINER = 'blue-app'
         GREEN_CONTAINER = 'green-app'
         NGINX_CONTAINER = 'bg-nginx'
+
+        // Actual nginx.conf used by the running Nginx container
+        NGINX_CONFIG = 'C:\\Users\\SSR\\Desktop\\nodejs-bluegreen-jenkins\\nginx.conf'
     }
 
     stages {
@@ -18,7 +22,9 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image...'
+                echo '=========================================='
+                echo '        BUILDING DOCKER IMAGE'
+                echo '=========================================='
 
                 bat 'docker build -t %IMAGE% .'
 
@@ -116,8 +122,11 @@ pipeline {
                 echo "   SWITCHING TRAFFIC TO ${env.TARGET_ENV}"
                 echo '=========================================='
 
+                echo "Updating actual Nginx configuration:"
+                echo "%NGINX_CONFIG%"
+
                 bat '''
-                powershell -NoProfile -Command "$c=Get-Content nginx.conf; $c=$c -replace 'host.docker.internal:\\d+','host.docker.internal:%TARGET_PORT%'; Set-Content nginx.conf $c"
+                powershell -NoProfile -Command "$path=$env:NGINX_CONFIG; Write-Host 'Updating Nginx configuration at:' $path; $c=Get-Content $path; $c=$c -replace 'host.docker.internal:\\d+','host.docker.internal:%TARGET_PORT%'; Set-Content $path $c"
 
                 docker restart %NGINX_CONTAINER%
                 '''
@@ -169,7 +178,7 @@ pipeline {
 
             echo "Traffic has been switched to ${env.TARGET_ENV}."
 
-            echo 'The previous environment remains available for rollback.'
+            echo 'Previous environment remains available for rollback.'
 
             echo '=========================================='
         }
